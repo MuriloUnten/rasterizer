@@ -1,6 +1,6 @@
 package main
 
-import "core:fmt"
+import "core:mem"
 import rl "vendor:raylib"
 
 W_WIDTH :: 1024
@@ -43,6 +43,37 @@ point_in_triangle :: proc(t: ^Triangle, point: Point) -> bool {
     return left_of_ab && left_of_bc && left_of_ca
 }
 
+get_edge_x :: proc(a: Point, b: Point, y: f32) -> (x: f32, ok: bool) {
+    if (a.y <= y && y < b.y) || (b.y <= y && y < a.y) {
+        t := (y - a.y) / (b.y - a.y)
+        return a.x + t * (b.x - a.x), true
+    }
+    return 0, false
+}
+
+// for triangles, this isn't a problem because exactly one case is guaranteed to fail 
+get_scanline_indices :: proc(t: ^Triangle, y: i32) -> (i32, i32) {
+    measures := [2]f32{0, 0}
+    i := 0
+
+    yf := f32(y)
+    if x, ok := get_edge_x(t.a, t.b, yf); ok {
+        measures[i] = x
+        i += 1
+    }
+    if x, ok := get_edge_x(t.b, t.c, yf); ok {
+        measures[i] = x
+        i += 1
+    }
+    if x, ok := get_edge_x(t.c, t.a, yf); ok {
+        measures[i] = x
+        i += 1
+    }
+    start := i32(min(measures[0], measures[1]))
+    end := i32(max(measures[0], measures[1]))
+    return start, end
+}
+
 main :: proc() {
     triangles: [2]Triangle = {
         {{500, 500}, {800, 400}, {200, 200}, rl.BLUE},
@@ -50,28 +81,28 @@ main :: proc() {
     }
 
     rl.InitWindow(W_WIDTH, W_HEIGHT, "raylib window")
-    framebuffer := rl.GenImageColor(W_WIDTH, W_HEIGHT, rl.BLACK)
-    texture := rl.LoadTextureFromImage(framebuffer)
+    image := rl.GenImageColor(W_WIDTH, W_HEIGHT, rl.BLACK)
+    texture := rl.LoadTextureFromImage(image)
 
     for !rl.WindowShouldClose() {
+        // hack to clear the image buffer very quickly
+        // TODO: refactor this into my own framebuffer and decouple from raylib
+        mem.zero(image.data, W_WIDTH * W_HEIGHT * size_of(rl.Color))
+        framebuffer := cast([^]rl.Color)image.data
+
         for &t in triangles {
-            left   := i32(min(t.a.x, t.b.x, t.c.x))
             top    := i32(min(t.a.y, t.b.y, t.c.y))
-            right  := i32(max(t.a.x, t.b.x, t.c.x))
             bottom := i32(max(t.a.y, t.b.y, t.c.y))
 
             for y: i32 = top; y <= bottom; y += 1 {
-                for x: i32 = left; x <= right; x += 1 {
-                    pixel := Vec2{f32(x), f32(y)}
-
-                    if point_in_triangle(&t, pixel) { 
-                        rl.ImageDrawPixel(&framebuffer, x, y, t.color)
-                    }
+                start_x, end_x := get_scanline_indices(&t, y)
+                for x: i32 = start_x; x <= end_x; x += 1 {
+                    framebuffer[y * W_WIDTH + x] = t.color
                 }
             }
         }
 
-        rl.UpdateTexture(texture, framebuffer.data)
+        rl.UpdateTexture(texture, image.data)
         rl.BeginDrawing()
             rl.ClearBackground(rl.BLACK)
             rl.DrawTexture(texture, 0, 0, rl.WHITE)
@@ -79,7 +110,7 @@ main :: proc() {
         rl.EndDrawing()
     }
 
-    rl.UnloadImage(framebuffer)
+    rl.UnloadImage(image)
     rl.UnloadTexture(texture)
     rl.CloseWindow()
 }
