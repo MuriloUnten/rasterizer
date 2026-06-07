@@ -18,6 +18,12 @@ Triangle :: struct {
     color: rl.Color,
 }
 
+triangles: [2]Triangle = {
+    {{500, 500}, {800, 400}, {200, 200}, rl.BLUE},
+    {{400, 700}, {700, 100}, {300, 150}, rl.RED},
+}
+
+
 vec2_dot_product :: proc(a, b: Vec2) -> f32 {
     return a.x * b.x + a.y * b.y
 }
@@ -75,42 +81,52 @@ get_scanline_indices :: proc(t: ^Triangle, y: i32) -> (i32, i32) {
 }
 
 main :: proc() {
-    triangles: [2]Triangle = {
-        {{500, 500}, {800, 400}, {200, 200}, rl.BLUE},
-        {{400, 700}, {700, 100}, {300, 150}, rl.RED},
-    }
-
     rl.InitWindow(W_WIDTH, W_HEIGHT, "raylib window")
     image := rl.GenImageColor(W_WIDTH, W_HEIGHT, rl.BLACK)
     texture := rl.LoadTextureFromImage(image)
 
     for !rl.WindowShouldClose() {
-        // hack to clear the image buffer very quickly
-        // TODO: refactor this into my own framebuffer and decouple from raylib
-        mem.zero(image.data, W_WIDTH * W_HEIGHT * size_of(rl.Color))
-        framebuffer := cast([^]rl.Color)image.data
-
-        for &t in triangles {
-            top    := i32(min(t.a.y, t.b.y, t.c.y))
-            bottom := i32(max(t.a.y, t.b.y, t.c.y))
-
-            for y: i32 = top; y <= bottom; y += 1 {
-                start_x, end_x := get_scanline_indices(&t, y)
-                for x: i32 = start_x; x <= end_x; x += 1 {
-                    framebuffer[y * W_WIDTH + x] = t.color
-                }
-            }
-        }
-
-        rl.UpdateTexture(texture, image.data)
-        rl.BeginDrawing()
-            rl.ClearBackground(rl.BLACK)
-            rl.DrawTexture(texture, 0, 0, rl.WHITE)
-            rl.DrawFPS(0, 0)
-        rl.EndDrawing()
+        dt := rl.GetFrameTime()
+        input(dt)
+        update(dt)
+        render(image, texture)
     }
 
     rl.UnloadImage(image)
     rl.UnloadTexture(texture)
     rl.CloseWindow()
+}
+
+input :: proc(dt: f32) {
+
+}
+
+update :: proc(dt: f32) {
+
+}
+
+render :: proc(image: rl.Image, texture: rl.Texture) {
+    // hack to clear the image buffer very quickly
+    // TODO: refactor this into my own framebuffer and decouple from raylib
+    mem.zero(image.data, W_WIDTH * W_HEIGHT * size_of(rl.Color))
+    framebuffer := cast([^]rl.Color)image.data
+
+    for &t in triangles {
+        top    := i32(min(t.a.y, t.b.y, t.c.y))
+        bottom := i32(max(t.a.y, t.b.y, t.c.y))
+
+        for y: i32 = top; y <= bottom; y += 1 {
+            start_x, end_x := get_scanline_indices(&t, y)
+            for x: i32 = start_x; x <= end_x; x += 1 {
+                framebuffer[y * W_WIDTH + x] = t.color
+            }
+        }
+    }
+
+    rl.UpdateTexture(texture, image.data)
+    rl.BeginDrawing()
+        rl.ClearBackground(rl.BLACK)
+        rl.DrawTexture(texture, 0, 0, rl.WHITE)
+        rl.DrawFPS(0, 0)
+    rl.EndDrawing()
 }
